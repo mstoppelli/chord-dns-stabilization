@@ -1,0 +1,34 @@
+from utility import consistent_hash
+from random import randrange
+class DNSClient(process):
+    def setup(m, domains, nodes, config):
+        pass
+    def run():
+        if await(False):
+            return
+        elif timeout(1):
+            nodes_to_kill = config['nodesToKill']
+            for i in range(nodes_to_kill):
+                kill_random_node()
+            #output("not killing node")
+        if await(False):
+            return
+        elif timeout(20): # give time to restabilize
+            domains_to_process = config['domainsToFetch']
+            for i in range(domains_to_process):
+                get_random_domain()
+        await(False)
+
+    def kill_random_node():
+        node_num = randrange(0, len(nodes))
+        node = nodes[node_num]
+        send(('kill'), to=node.process_id)
+        nodes.remove(node)
+        output("Random node killed {}".format(node.identifier))
+
+    def get_random_domain():
+        key = domains[randrange(0, len(domains))][0]
+        node = nodes[randrange(0, len(nodes))]
+        send(('get', key), to=node.process_id)
+        await(some(received(('getResponse', value, hops_), from_ = node.process_id)))
+        output("Got in {} hops".format(hops_))

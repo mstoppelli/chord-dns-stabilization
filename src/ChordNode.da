@@ -1,0 +1,188 @@
+import logging
+from utility import ChordNodeDescriptor
+from random import randrange
+
+"""
+ChordNode class. Doesn't need a successor, as the first value in the finger table is the successor
+"""
+class ChordNode(process):
+    def setup(descriptor: ChordNodeDescriptor, m: int, predecessor: ChordNodeDescriptor, finger_table: dict[int, ChordNodeDescriptor], key_values: dict[int, object], successor_list: list):
+        self.identifier_to_address = {}
+        for i in finger_table:
+            self.identifier_to_address[finger_table[i].identifier] = finger_table[i].process_id
+        for successor in successor_list:
+            identifier_to_address[successor.identifier] = successor.process_id
+        identifier_to_address[descriptor.identifier] = descriptor.process_id
+        self.identifier_to_address[predecessor.identifier] = predecessor.process_id
+        self.hops = 0
+        self.next_finger = 0
+        self.timeoutDelay = randrange(1, 2)
+        self.replicated_entries = {}
+        self.successor_entry = 0
+        self.requestID = 0
+
+    
+    def run():
+        output("ChordNode {} is running. Number of KV pairs: {}".format(descriptor.identifier, len(key_values)))
+        while True:
+            if await(False):
+                continue
+            elif timeout(self.timeoutDelay):
+                self.check_predecessor()
+                self.stabilize()
+                self.fix_fingers()
+                self.replicate_to_successors()
+
+    def my_successor():
+        #output("{} reporting successor of {}".format(descriptor.identifier, successor_list[self.successor_entry].identifier))
+        return successor_list[self.successor_entry]
+
+    def find_successor(identifier):
+        n = self.descriptor.identifier
+        successor = my_successor()
+        if self.in_range(n, successor.identifier, identifier, True):
+            return successor
+        else:
+            n0 = closest_preceding_node(identifier)
+            if n0.identifier == n:
+                return successor
+            return network_request_successor(n0.identifier, identifier)
+
+    def closest_preceding_node(identifier):
+        n = descriptor.identifier
+        for i in range(m, 0, -1):
+            if self.in_range(n, identifier, finger_table[i].identifier, False):
+                return finger_table[i]
+        return descriptor
+
+    def check_predecessor():
+        #output("checking predecessor...")
+        if not network_ping(predecessor.identifier):
+            output("Predecessor dead")
+            predecessor = None
+        #output("Predecessor still alive")
+
+    def stabilize():
+        #output("Stabilizing")
+        succ = find_successor(descriptor.identifier)
+        successor_state = network_ping(succ.identifier)
+        if not successor_state:
+            successor_entry += 1
+            finger_table[1] = my_successor()
+            network_notify(my_successor().identifier)
+            return
+        x = network_request_predecessor(succ.identifier)
+        if self.in_range(descriptor.identifier, succ.identifier, x.identifier, False):
+            finger_table[1] = x
+            successor_list[successor_entry] = x
+        network_notify(my_successor().identifier)
+        
+    def fix_fingers():
+        #output("{} Fixing fingers".format(descriptor.identifier))
+        next_finger += 1
+        if next_finger > m:
+            next_finger = 1
+        n = self.descriptor.identifier
+        val = (n+(2**(next_finger-1))) % (2**m)
+        old = finger_table[next_finger]
+        new_succ = find_successor(val)
+        finger_table[next_finger] = find_successor(val)
+        if old.identifier != finger_table[next_finger].identifier:
+            output("REPLACE: {} Replacing {} with {}".format(descriptor.identifier,old.identifier, finger_table[next_finger].identifier))
+
+
+    def get(key):
+        if key in key_values:
+            return key_values[key]
+        if key in replicated_entries:
+            return self.replicated_entries[key]
+        succ = find_successor(key)
+        return network_request_key(succ.identifier, key)
+
+    def replicate_to_successors():
+        for successor in successor_list:
+            network_replicate(successor.identifier)
+
+
+    def network_request_successor(identifier, target):
+        thisRequestID = self.requestID + 1
+        self.requestID += 1
+        output("{} Requesting successor for {} from {}".format(descriptor.identifier, target, identifier))
+        send(('successor', target, thisRequestID), to=self.identifier_to_address[identifier])
+        await(some(received(('successorResponse', successor_,requestID_, hops_), from_ = self.identifier_to_address[identifier]), has=(requestID_ == thisRequestID)))
+        self.hops = hops_
+        #output(self.hops)
+        output("{} Got successor response: {}".format(descriptor.identifier,successor_.identifier))
+        self.identifier_to_address[successor_.identifier] = successor_.process_id
+        return successor_
+
+    def network_request_key(identifier, key):
+        #output("Sending request for key")
+        send(('get', key), to=self.identifier_to_address[identifier])
+        await(some(received(('getResponse', value_, hops_), from_ = self.identifier_to_address[identifier])))
+        self.hops = self.hops+1
+        #output(self.hops)
+        return value_
+
+    def network_request_predecessor(identifier):
+        send(('predecessor'), to=self.identifier_to_address[identifier])
+        await(some(received(('predecessorResponse', pred_), from_ = self.identifier_to_address[identifier])))
+        return pred_
+
+    def network_notify(identifier):
+        send(('notification', self.descriptor), to = identifier_to_address[identifier])
+
+    def network_ping(identifier):
+        send(('ping'), to = identifier_to_address[identifier])
+        if await(await(some(received(('pingResponse', pred_), from_ = self.identifier_to_address[identifier])))):
+            return True
+        elif timeout(5):
+            return False
+    
+    def network_replicate(identifier):
+        send(('replicate', key_values), to=identifier_to_address[identifier])
+
+    def receive(msg=('successor', target_, requestID_), from_ = client):
+        output("Received successor request")
+        succ = find_successor(target_)
+        #output("Got succ")
+        send(('successorResponse', succ, requestID_, self.hops+1), to=client)
+        self.hops = 0
+        #output("Sent succ to {}".format(client))
+    
+    def receive(msg=('get', key_), from_ = client):
+        output("Received get request")
+        value = get(key_)
+        #output("Got value for {}: {}".format(key_, value))
+        send(('getResponse', value, self.hops+1), to = client)
+        self.hops = 0
+    
+    def receive(msg=('ping'), from_ = client):
+        send(('pingResponse'), to=client)
+
+    def receive(msg=('predecessor'), from_ = client):
+        send(('predecessorResponse', predecessor), to=client)
+
+    def receive(msg=('notification', possible_pred_), from_ = client):
+        p = predecessor.identifier
+        n = descriptor.identifier
+        n_prime = possible_pred_.identifier
+        if predecessor == None or self.in_range(n, p, n_prime, False):
+            predecessor = possible_pred_
+            identifier_to_address[n_prime] = possible_pred_.process_id
+
+    def receive(msg=('replicate', kv_entries_), from_ = client):
+        for key in kv_entries_:
+            self.replicated_entries[key] = kv_entries_[key]
+
+    def receive(msg=('kill'), from_=client):
+        exit(0)
+
+    def in_range(start, end, id, half_closed):  # id in range (s, e]?
+        if id < start:
+            id += ((2 ** m))
+        if end < start:
+            end += ((2 ** m))
+        if half_closed:
+            return (id > start and id <= end)
+        return (id > start and id < end)

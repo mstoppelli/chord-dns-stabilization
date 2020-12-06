@@ -1,0 +1,106 @@
+from ChordNode import ChordNode
+from DNSClient import DNSClient
+from utility import consistent_hash, ChordNodeDescriptor, load_data
+from random import randrange
+import json
+    
+def find_successor(sorted_nodes: list, identifier):
+    for node in sorted_nodes:
+        if node.identifier > identifier:
+            return node
+    return sorted_nodes[0]
+
+def create_nodes(ips, m, processes):
+    nodes = []
+    for i in range(len(ips)):
+        process = processes[i]
+        ip = ips[i]
+        identifier = consistent_hash(ip, m)
+        descriptor = ChordNodeDescriptor(identifier, process)
+        nodes.append(descriptor)
+    return nodes
+
+def create_finger_tables(sorted_nodes, m):
+    finger_tables = {} # map identifier to finger table
+    for node in sorted_nodes: # for every node, we make a finger table
+        n = node.identifier
+        finger_tables[n] = {}
+        for i in range(1, m+1): # contains up to m entries, we start from 1 like the paper
+            finger_val = (n + (2 ** (i-1))) % ( 2 ** m )
+            finger_tables[n][i] = find_successor(sorted_nodes, finger_val)
+    return finger_tables
+
+
+
+def create_kv_stores(nodes, m, key_val_pairs: list[tuple[int, str]]):
+    kv_banks = {}
+    for kv in key_val_pairs:
+        owner = find_successor(nodes, kv[0])
+        owner_bank = kv_banks.setdefault(owner.identifier, {})
+        owner_bank[kv[0]] = kv[1]
+    for node in nodes:
+        kv_banks.setdefault(node.identifier, {})
+    return kv_banks
+
+
+def generate_ip(num):
+    ips = []
+    for i in range(num):
+        a = str(randrange(1, 200))
+        b = str(randrange(1, 200))
+        c = str(randrange(1, 200))
+        d = str(randrange(1, 200))
+        ip = '.'.join([a, b, c, d])
+        ips.append(ip)
+    return ips
+
+def make_successor_lists(sorted_nodes: list[ChordNodeDescriptor], r: int):
+    successor_lists = {}
+    for i in range(len(sorted_nodes)):
+        n = sorted_nodes[i].identifier
+        successor_lists[n] = []
+        print("Successor list for {}".format(n))
+        for j in range(i+1, i+1+r):
+            j = j % len(sorted_nodes)
+            successor_lists[n].append(sorted_nodes[j])
+            print(sorted_nodes[j].identifier)
+    return successor_lists
+
+def main():
+    def setup_nodes(nodes, setup_vals):
+        finger_tables = setup_vals['fingers']
+        kv = setup_vals['kv']
+        m = setup_vals['m']
+        succ_lists = setup_vals['successor_lists']
+        for i in range(len(nodes)):
+            node = nodes[i]
+            setup(node.process_id, (node, m, nodes[i-1], finger_tables[node.identifier], kv[node.identifier], succ_lists[node.identifier]))
+    def start_nodes(nodes):
+        for node in nodes:
+            start(node.process_id)
+    with open('config.json') as configFile:
+        config = json.load(configFile)
+    m = config['m']
+    r = config['r']
+    kv_pairs = load_data(config['dataFile'], m)
+    num_nodes = config['numNodes']
+    ips = generate_ip(num_nodes)
+    processes = list(new(ChordNode, num=len(ips)))
+    nodes = create_nodes(ips, m, processes)
+    sorted_nodes = sorted(nodes, key=lambda node: node.identifier)
+    finger_tables = create_finger_tables(sorted_nodes, m)
+    kv_banks = create_kv_stores(sorted_nodes, m, kv_pairs)
+    successor_lists = make_successor_lists(sorted_nodes, r)
+    setup_vals = {}
+    setup_vals['fingers'] = finger_tables
+    setup_vals['kv'] = kv_banks
+    setup_vals['m'] = m
+    setup_vals['successor_lists'] = successor_lists
+    setup_nodes(sorted_nodes, setup_vals)
+    start_nodes(sorted_nodes)
+
+    resolver = new(DNSClient)
+    setup(resolver, (m, kv_pairs, sorted_nodes, config))
+    start(resolver)
+    #output("Hops: {}".format(hops_))
+    await(False)

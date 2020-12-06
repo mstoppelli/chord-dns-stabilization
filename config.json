@@ -1,0 +1,8 @@
+{
+    "dataFile": "data/out_shuffled.json",
+    "numNodes": 30,
+    "r": 3,
+    "m": 20,
+    "domainsToFetch": 1000,
+    "nodesToKill": 0
+}
