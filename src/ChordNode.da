@@ -93,6 +93,9 @@ class ChordNode(process):
         finger_table[next_finger] = find_successor(val)
         if old.identifier != finger_table[next_finger].identifier:
             output("REPLACE: {} Replacing {} with {}".format(descriptor.identifier,old.identifier, finger_table[next_finger].identifier))
+            for i in range(1, m+1):
+                if finger_table[i].identifier == old.identifier:
+                    finger_table[i] = finger_table[next_finger]
 
 
     def get(key):
