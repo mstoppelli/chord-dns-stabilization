@@ -27,7 +27,9 @@ class DNSClient(process):
         output("Random node killed {}".format(node.identifier))
 
     def get_random_domain():
-        key = domains[randrange(0, len(domains))][0]
+        kv = domains[randrange(0, len(domains))]
+        key = kv[0]
+        domains.remove(kv)
         node = nodes[randrange(0, len(nodes))]
         send(('get', key), to=node.process_id)
         await(some(received(('getResponse', value, hops_), from_ = node.process_id)))

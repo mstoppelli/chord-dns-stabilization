@@ -29,7 +29,7 @@ class ChordNode(process):
         while True:
             if await(False):
                 return
-            elif timeout(timeoutDelay):
+            elif timeout(0.5):
                 self.check_predecessor()
                 self.stabilize()
                 self.fix_fingers()
@@ -187,13 +187,18 @@ class ChordNode(process):
             self.replicated_entries[key] = kv_entries_[key]
 
     def receive(msg=('kill', otherNodes_), from_=client):
-        for node in otherNodes_:
-            if node.identifier == descriptor.identifier:
-                continue
-            send(('imDead', descriptor), to=node.process_id)
+        #for node in otherNodes_:
+        #    if node.identifier == descriptor.identifier:
+        #        continue
+        #    send(('imDead', descriptor), to=node.process_id)
+        send(('imDead', descriptor), to=my_successor().process_id)
+        send(('imDead', descriptor), to=predecessor.process_id)
         exit(0)
 
     def receive(msg=('imDead', deadNode_), from_ = client):
+        if deadNode_.identifier not in self.dead_nodes:
+            for entry in finger_table:
+                send(('imDead', deadNode_), to=finger_table[entry].process_id)
         self.dead_nodes.append(deadNode_.identifier)
 
     def in_range(start, end, id, half_closed):  # id in range (s, e]?
