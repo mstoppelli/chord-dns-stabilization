@@ -22,6 +22,7 @@ class ChordNode(process):
         self.successor_entry = 0
         self.requestID = 0
         self.dead_nodes = []
+        self.network_visits = 0
 
     
     def run():
@@ -48,7 +49,10 @@ class ChordNode(process):
             n0 = closest_preceding_node(identifier)
             if n0.identifier == n:
                 return successor
-            return network_request_successor(n0.identifier, identifier)
+            res = network_request_successor(n0.identifier, identifier)
+            if res != None:
+                return res
+            return network_request_successor(find_successor(n0.identifier), identifier)
 
     def closest_preceding_node(identifier):
         n = descriptor.identifier
