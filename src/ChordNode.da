@@ -1,6 +1,7 @@
 import logging
 from utility import ChordNodeDescriptor
 from random import randrange
+import time
 
 """
 ChordNode class. Doesn't need a successor, as the first value in the finger table is the successor
@@ -20,14 +21,15 @@ class ChordNode(process):
         self.replicated_entries = {}
         self.successor_entry = 0
         self.requestID = 0
+        self.dead_nodes = []
 
     
     def run():
         output("ChordNode {} is running. Number of KV pairs: {}".format(descriptor.identifier, len(key_values)))
         while True:
             if await(False):
-                continue
-            elif timeout(self.timeoutDelay):
+                return
+            elif timeout(timeoutDelay):
                 self.check_predecessor()
                 self.stabilize()
                 self.fix_fingers()
@@ -57,6 +59,8 @@ class ChordNode(process):
 
     def check_predecessor():
         #output("checking predecessor...")
+        if predecessor == None:
+            return
         if not network_ping(predecessor.identifier):
             output("Predecessor dead")
             predecessor = None
@@ -105,14 +109,16 @@ class ChordNode(process):
 
 
     def network_request_successor(identifier, target):
+        if not self.network_ping(identifier):
+            return None
         thisRequestID = self.requestID + 1
         self.requestID += 1
-        output("{} Requesting successor for {} from {}".format(descriptor.identifier, target, identifier))
+        #output("{} Requesting successor for {} from {}".format(descriptor.identifier, target, identifier))
         send(('successor', target, thisRequestID), to=self.identifier_to_address[identifier])
         await(some(received(('successorResponse', successor_,requestID_, hops_), from_ = self.identifier_to_address[identifier]), has=(requestID_ == thisRequestID)))
         self.hops = hops_
         #output(self.hops)
-        output("{} Got successor response: {}".format(descriptor.identifier,successor_.identifier))
+        #output("{} Got successor response: {}".format(descriptor.identifier,successor_.identifier))
         self.identifier_to_address[successor_.identifier] = successor_.process_id
         return successor_
 
@@ -132,18 +138,17 @@ class ChordNode(process):
     def network_notify(identifier):
         send(('notification', self.descriptor), to = identifier_to_address[identifier])
 
+    # This cant use timeout since i think only one timeout can be running for a process at a time. nice undocumented behavior
     def network_ping(identifier):
-        send(('ping'), to = identifier_to_address[identifier])
-        if await(await(some(received(('pingResponse', pred_), from_ = self.identifier_to_address[identifier])))):
-            return True
-        elif timeout(5):
+        if identifier in self.dead_nodes:
             return False
+        return True
     
     def network_replicate(identifier):
         send(('replicate', key_values), to=identifier_to_address[identifier])
 
     def receive(msg=('successor', target_, requestID_), from_ = client):
-        output("Received successor request")
+        #output("Received successor request")
         succ = find_successor(target_)
         #output("Got succ")
         send(('successorResponse', succ, requestID_, self.hops+1), to=client)
@@ -164,7 +169,10 @@ class ChordNode(process):
         send(('predecessorResponse', predecessor), to=client)
 
     def receive(msg=('notification', possible_pred_), from_ = client):
-        p = predecessor.identifier
+        if possible_pred_ == None:
+            return
+        if predecessor != None:
+            p = predecessor.identifier
         n = descriptor.identifier
         n_prime = possible_pred_.identifier
         if predecessor == None or self.in_range(n, p, n_prime, False):
@@ -175,8 +183,15 @@ class ChordNode(process):
         for key in kv_entries_:
             self.replicated_entries[key] = kv_entries_[key]
 
-    def receive(msg=('kill'), from_=client):
+    def receive(msg=('kill', otherNodes_), from_=client):
+        for node in otherNodes_:
+            if node.identifier == descriptor.identifier:
+                continue
+            send(('imDead', descriptor), to=node.process_id)
         exit(0)
+
+    def receive(msg=('imDead', deadNode_), from_ = client):
+        self.dead_nodes.append(deadNode_.identifier)
 
     def in_range(start, end, id, half_closed):  # id in range (s, e]?
         if id < start:

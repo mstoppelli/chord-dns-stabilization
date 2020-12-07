@@ -22,7 +22,7 @@ class DNSClient(process):
     def kill_random_node():
         node_num = randrange(0, len(nodes))
         node = nodes[node_num]
-        send(('kill'), to=node.process_id)
+        send(('kill', nodes), to=node.process_id)
         nodes.remove(node)
         output("Random node killed {}".format(node.identifier))
 

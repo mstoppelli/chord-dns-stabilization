@@ -59,11 +59,9 @@ def make_successor_lists(sorted_nodes: list[ChordNodeDescriptor], r: int):
     for i in range(len(sorted_nodes)):
         n = sorted_nodes[i].identifier
         successor_lists[n] = []
-        print("Successor list for {}".format(n))
         for j in range(i+1, i+1+r):
             j = j % len(sorted_nodes)
             successor_lists[n].append(sorted_nodes[j])
-            print(sorted_nodes[j].identifier)
     return successor_lists
 
 def main():
