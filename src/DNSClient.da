@@ -1,8 +1,12 @@
 from utility import consistent_hash
 from random import randrange
+import statistics
+import json
+
 class DNSClient(process):
     def setup(m, domains, nodes, config):
-        pass
+        self.node_summaries = {}
+        self.hop_list = []
     def run():
         if await(False):
             return
@@ -10,6 +14,7 @@ class DNSClient(process):
             nodes_to_kill = config['nodesToKill']
             for i in range(nodes_to_kill):
                 kill_random_node()
+            self.node_summaries = {}
             #output("not killing node")
         if await(False):
             return
@@ -17,14 +22,34 @@ class DNSClient(process):
             domains_to_process = config['domainsToFetch']
             for i in range(domains_to_process):
                 get_random_domain()
-        await(False)
+        for node in nodes:
+            kill_node(node)
+        out_file_desc = config['testOutput']
+        with open(out_file_desc, 'w') as out_file:
+            output = {}
+            output['meanHops'] = statistics.mean(self.hop_list)
+            output['maxHops'] = max(self.hop_list)
+            output['minHops'] = min(self.hop_list)
+            output['medianHops'] = statistics.median(self.hop_list)
+            node_visits = [self.node_summaries[n]['network_visits'] for n in self.node_summaries]
+            output['maxLoad'] = max(node_visits)
+            output['minLoad'] = min(node_visits)
+            output['averageLoad'] = statistics.mean(node_visits)
+            output['medianLoad'] = statistics.median(node_visits)
+            json.dump(output, out_file)
+            
 
     def kill_random_node():
         node_num = randrange(0, len(nodes))
         node = nodes[node_num]
-        send(('kill', nodes), to=node.process_id)
-        nodes.remove(node)
+        kill_node(node)
         output("Random node killed {}".format(node.identifier))
+
+    def kill_node(node):
+        send(('kill', nodes), to=node.process_id)
+        await(some(received(('summary', summary_), from_ = node.process_id)))
+        self.node_summaries[node.identifier] = summary_
+        nodes.remove(node)
 
     def get_random_domain():
         kv = domains[randrange(0, len(domains))]
@@ -34,3 +59,4 @@ class DNSClient(process):
         send(('get', key), to=node.process_id)
         await(some(received(('getResponse', value, hops_), from_ = node.process_id)))
         output("Got in {} hops".format(hops_))
+        self.hop_list.append(hops_)
